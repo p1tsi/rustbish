@@ -1,9 +1,9 @@
 # Rustbish (WIP)
 
-Rustbish is a tool written in Rust that lets you dumpster dive
-into SQLite files looking for some valuable data.
+Rustbish is a tool written in Rust for dumpster diving
+into SQLite files and their corresponding WAL to resurrect lost or deleted data.
 Rustbish is an SQLite database parser through which extract data
-without perform an "sqlite3_open" call, which cause a WAL checkpoint. 
+without perform an "sqlite3_open" call, which causes a WAL checkpoint operation. 
 The tool is designed specifically for forensic investigators and security experts
 who need to extract crucial information from SQLite databases.
 
