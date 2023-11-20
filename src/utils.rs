@@ -5,8 +5,9 @@ use std::str::from_utf8;
 use std::cell::RefCell;
 
 lazy_static! {
-    static ref CREATE_TABLE_RE: Regex = Regex::new(r#"(?i)^CREATE TABLE [^(]+\(([a-zA-Z0-9_ ,()\[\]'"]*)\)"#).unwrap();
+    static ref CREATE_TABLE_RE: Regex = Regex::new(r#"(?i)^CREATE TABLE [^(]+\(([a-zA-Z0-9_ ,%()\[\]'"]*)\)"#).unwrap();
     static ref VARCHAR_RE: Regex = Regex::new(r"[N]+VARCHAR[ ]*(\(.*\))*").unwrap();
+    static ref CAST_FUNC_RE: Regex = Regex::new(r"\(CAST\([a-zA-Z0-9, '_%()]*AS INTEGER\)\)").unwrap();
 }
 
 //https://github.com/MidasLamb/sqlite-varint/blob/master/src/lib.rs
@@ -37,10 +38,10 @@ pub fn get_column_names_from_creation_query(query: &str) -> Result<Vec<String>, 
         .as_str()){
         Some(captures) => {
             let column_definition = captures.get(1).unwrap().as_str();
-
+            let cast_func_removed = CAST_FUNC_RE.replace(column_definition, "");
             let mut columns: Vec<String> = vec![];
 
-            for column_def in column_definition.split(',') {
+            for column_def in cast_func_removed.split(',') {
                 // This words defines last part of the columns section.
                 if column_def.trim().to_ascii_uppercase().starts_with("CONSTRAINT") ||
                     column_def.trim().to_ascii_uppercase().starts_with("FOREIGN") ||
@@ -50,9 +51,10 @@ pub fn get_column_names_from_creation_query(query: &str) -> Result<Vec<String>, 
                         break;
                 }
 
-                if VARCHAR_RE.replace(column_def, "").contains("VARCHAR"){
+                //TODO: Removed for now
+                /*if VARCHAR_RE.replace(column_def, "").contains("VARCHAR"){
                     continue;
-                }
+                }*/
 
                 columns.push(column_def.trim()
                     .replace('"', "")
@@ -93,12 +95,12 @@ pub fn get_column_names_from_creation_query(query: &str) -> Result<Vec<String>, 
     }
     
     map
-}*/
+}
 
 
 pub fn is_table_without_rowid(query: &str) -> bool {
     query.trim().to_ascii_uppercase().replace(";", "").ends_with("WITHOUT ROWID")
-}
+}*/
 
 
 thread_local! {
@@ -109,6 +111,7 @@ thread_local! {
 pub fn read_encoded_string(bytes: &[u8]) -> String {
     STRING_ENCODING.with(|encoding| {
         match *encoding.borrow() {
+            0 => read_utf8_string(bytes),
             1 => read_utf8_string(bytes),
             2 => read_utf16le_string(bytes),
             3 => read_utf16be_string(bytes),

@@ -100,7 +100,7 @@ impl WALFrame {
     ) -> Option<WALFrame> {
 
         let header: WALFrameHeader = WALFrameHeader::new(bytearray, offset);
-        debug!("FRAME WITH PAGE: {:?}", header.page_num);
+        debug!("FRAME WITH PAGE: {:?} (0x{:02x?})", header.page_num, offset);
 
         //let mainpage_offset = (header.page_num - 1) as usize * 4096;
         //debug!("{}", &bytearray[offset + 24 .. offset + 24 + 4096] == &maindbbytes[mainpage_offset .. mainpage_offset + 4096]);
@@ -150,7 +150,7 @@ impl std::fmt::Debug for WALFrame {
 
         res = writeln!(f, "FRAME {}", self.i);
         res = writeln!(f, "{:?}", self.header);
-        //res = writeln!(f, "{:?}", self.page);
+        res = writeln!(f, "{:?}", self.page);
 
         res
     }
@@ -211,8 +211,8 @@ impl std::fmt::Debug for WALFileHeader {
 /// Representation of a WAL file
 #[derive(Clone)]
 pub struct WALFile {
-    header :    WALFileHeader,
-    frames :    Vec<WALFrame>,
+    header: WALFileHeader,
+    frames: Vec<WALFrame>,
 }
 
 impl WALFile {

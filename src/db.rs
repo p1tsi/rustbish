@@ -133,9 +133,58 @@ impl Diff {
                 mods_seq.sequence.push(cell.data());
             }   
         }
-
     }
 
+    fn to_csv(&self) -> String {
+        let mut csv_string = String::from("");
+
+        self.insertions
+        .iter()
+        .for_each(
+            |ins| {
+                csv_string.push_str(ins.to_csv().as_str());
+                csv_string.push_str("1,0,0\n");
+            }
+        );
+
+        self.deletions
+        .iter()
+        .for_each(
+            |del| {
+                csv_string.push_str(del.to_csv().as_str());
+                csv_string.push_str("0,1,0\n");
+            }
+        );
+
+        self.modifications
+        .iter()
+        .for_each(
+            |modif| {
+                modif.sequence.iter().for_each(
+                    |mod_row| {
+                        let mut row_csv = String::from(format!("{},", modif.rowid));
+                        mod_row.iter().for_each(|col| row_csv.push_str(format!("{},", col).as_str()));
+                        csv_string.push_str(row_csv.as_str());
+                        csv_string.push_str("0,0,1\n");
+                    }
+                );
+            }
+        );
+
+        csv_string
+    }
+
+}
+
+impl std::fmt::Debug for Diff {
+
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let res: std::fmt::Result;
+
+        res = writeln!(f, "{:?}", self.insertions);
+
+        res
+    }
 }
 
 
@@ -152,7 +201,7 @@ pub struct Table {
 
 impl Table {
 
-    pub fn new(db_file: &MainFile, wal_file: &Option<WALFile>, table_name: String, info: TableInfo) -> Result<Table, &'static str> {
+    pub fn new(db_file: &MainFile, wal_file: &Option<WALFile>, table_name: String, info: &TableInfo) -> Result<Table, &'static str> {
 
         debug!("{} - {}", table_name, info.sql);
         let columns: Vec<String> = match get_column_names_from_creation_query(&(info.sql)){
@@ -358,6 +407,66 @@ impl Table {
     /*pub fn set_deleted_rows(& mut self, deleted_rows: Option<Vec<HashMap<String, String>>>) -> () {
         self.deleted_rows = deleted_rows;
     }*/
+
+    pub fn to_csv(&self) -> String {
+        let mut columns = self.columns.clone();
+        if self.wal.is_some(){
+            let mut wal_cols = vec![
+                String::from("__INSERTED__"), 
+                String::from("__DELETED__"), 
+                String::from("__MODIFIED__")
+            ];
+            columns.append(&mut wal_cols);
+        }
+        else {
+            columns = self.columns.clone();
+        }
+
+        // Column names
+        let mut csv_string = String::from("__ROWID__,");
+        columns.iter().for_each(
+            |col| 
+                csv_string.push_str(
+                    format!("{col},").as_str()
+            )
+        );
+        let _ = csv_string.remove(csv_string.len() - 1); // remove last ','
+        csv_string.push_str("\n");
+
+        // rows from main file
+        self.rows
+        .iter()
+        .for_each(
+            |row| {
+                csv_string.push_str(row.to_csv().as_str());
+                if self.wal.is_some() {
+                    csv_string.push_str("0,0,0\n");
+                }
+                else{
+                    let _ = csv_string.remove(csv_string.len() - 1); // remove last ','
+                    csv_string.push_str("\n");
+                }
+            }
+        );
+
+        // rows from wal file
+        if self.wal.is_some() {
+            csv_string.push_str(
+                self.wal
+                .as_ref()
+                .unwrap()
+                .to_csv()
+                .as_str()
+            );
+        }
+        
+
+
+
+
+        //println!("{csv_string}");
+        csv_string
+    }
 }
 
 
@@ -378,21 +487,25 @@ impl DataBase {
 
         /* Tables */
         info!("Creating tables...");
-        for (table_name, info) in table_info {
-            info!("Table: {}", table_name);
-            let mut table: Table = match Table::new(&db_file, &wal_file, table_name, info) {
-                Ok(t) => t,
-                Err(e) => {
-                    warn!("{}", e);
-                    continue;
+        table_info
+        .iter()
+        .for_each(
+            |(table_name, info)| {
+                info!("Table: {}", table_name);
+                let mut table: Table = match Table::new(&db_file, &wal_file, table_name.to_string(), info) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        warn!("{}", e);
+                        return;
+                    }
+                };
+                if add_missing_ids {
+                    info!("Looking for missing row ids...");
+                    table.find_missing_rowids();
                 }
-            };
-            if add_missing_ids {
-                info!("Looking for missing row ids...");
-                table.find_missing_rowids();
+                tables.push(table);
             }
-            tables.push(table);
-        }
+        );
 
         /* Indices */
         if get_indices {
@@ -415,13 +528,13 @@ impl DataBase {
         }
     }
 
-    /*pub fn tables(&self) -> Vec<Table> {
+    pub fn tables(&self) -> Vec<Table> {
         self.tables.clone()
-    }*/
+    }
 
     pub fn to_json(&self) -> String {
         serde_json::to_string(&self).unwrap()
-    }
+    } 
 
     /*pub fn look_for_missing_ids(&self) -> () {
         trace!("LOOKING FOR MISSING IDS");

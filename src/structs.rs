@@ -5,28 +5,15 @@ use crate::utils::{
     read_varint,
     read_encoded_string
 };
+use std::str::from_utf8;
+
+use crate::constants::*;
 
 
 pub static mut OVERFLOW_PAGES   : Vec<u32> = vec![];
 pub static mut FREEPAGES        : Vec<u32> = vec![];
 pub static mut PAGE_SIZE        : usize = 0;
 pub static mut RESERVED_SPACE   : usize = 0;
-
-/* BTree page types */
-pub const INTERIOR_INDEX_BTREE_PAGE : u8    = 2;
-pub const INTERIOR_TABLE_BTREE_PAGE : u8    = 5;
-pub const LEAF_INDEX_BTREE_PAGE     : u8    = 10;
-pub const LEAF_TABLE_BTREE_PAGE     : u8    = 13;
-
-/* Known lengths */
-pub const FILE_HEADER_LEN           : usize = 100;
-pub const LEAF_BTREE_HEADER_LEN     : usize = 8;
-pub const INTERIOR_BTREE_HEADER_LEN : usize = 12;
-
-pub const WAL_FILE_HEADER_LEN       : usize = 32;
-pub const WAL_FRAME_HEADER_LEN      : usize = 24;
-
-
 
 
 // If I am looking for an overflow page in wal frames,
@@ -181,13 +168,13 @@ impl OverflowPage<'_> {
     }
 }
 
-
+type Row = Vec<String>;
 
 /// Representation of a cell contained in both table and index b-tree leaf pages
 #[derive(Serialize, Deserialize, Clone)]
 pub struct LeafCell {
     rowid: Option<u32>,
-    data: Vec<String>,
+    data: Row,
 }
 
 impl LeafCell {
@@ -967,6 +954,21 @@ impl LeafCell {
     pub fn data(&self) -> Vec<String> {
         self.data.clone()
     }
+
+    pub fn to_csv(&self) -> String {
+        let mut csv_string = String::from("");
+        self.data
+        .iter()
+        .for_each(
+            |item| 
+                csv_string.push_str(
+                    format!("{},{},", self.rowid.unwrap(), item).as_str()
+            )
+        );
+        
+        csv_string
+    }
+
 }
 
 impl TryFrom<&Cell> for LeafCell {
@@ -1149,7 +1151,17 @@ impl Page {
         let mut deleted_cells_count: u32 = 0;
 
         let header: PageHeader;
-        if page_num == 0 && !is_wal {
+        let mut first_page: bool = false;
+        let tag = match from_utf8(&bytearray[page_offset .. page_offset + 15]) {
+            Ok(v) => v,
+            Err(_) => "ERROR",
+        };
+
+        if tag == SQLITE_MAGIC {
+            header = PageHeader::new(&bytearray, page_offset + FILE_HEADER_LEN);
+            first_page = true;
+        }
+        else if page_num == 0 && !is_wal {
             header = PageHeader::new(&bytearray, FILE_HEADER_LEN);
         }
         else {
@@ -1208,7 +1220,8 @@ impl Page {
         if header.page_type == LEAF_TABLE_BTREE_PAGE /*|| header.page_type == 10*/ {
             debug!("Page type: leaf table page");
             let cell_array: Vec<usize>;
-            if page_num == 0 && !is_wal {
+            
+            if page_num == 0 && (!is_wal || first_page) {
                 cell_array = Self::get_cell_array(
                     bytearray, 
                     page_offset + FILE_HEADER_LEN + LEAF_BTREE_HEADER_LEN,

@@ -1,21 +1,19 @@
-use log::{info, trace, debug, warn};
+use log::{info, trace, debug};
 use std::collections::HashMap;
 use std::str::from_utf8;
+
+use crate::constants::*;
 
 use crate::structs::{
     Page,
     Cell,
-    LeafCell,
     OVERFLOW_PAGES,
     FREEPAGES,
     PAGE_SIZE,
     RESERVED_SPACE
 };
 
-use crate::utils::{
-    read_varint,
-    STRING_ENCODING
-};
+use crate::utils::STRING_ENCODING;
 
 
 #[derive(Clone)]
@@ -162,7 +160,7 @@ impl FreeListTrunkPage {
         cell_array
     }
 
-    fn parse_leaf_cell(
+    /*fn parse_leaf_cell(
         bytearray: &[u8], 
         page_type: u8, 
         cell_address: usize,
@@ -209,7 +207,7 @@ impl FreeListTrunkPage {
         }        
         
         cell
-    }
+    }*/
 
 }
 
@@ -266,13 +264,12 @@ impl FileHeader {
     /// Parses the first 100 bytes of the file
     pub fn new(bytearray: &[u8]) -> Result<FileHeader, &'static str> {
         info!("Parsing file header...");
-        let s: &[u8] = &bytearray[0..15];
-        let magic = match from_utf8(s) {
+        let magic = match from_utf8(&bytearray[0..15]) {
             Ok(v) => v,
             Err(_) => "ERROR",
         };
 
-        if magic != "SQLite format 3" {
+        if magic != SQLITE_MAGIC {
             return Err("NOT AN SQLITE FILE");
         }
 
@@ -318,26 +315,26 @@ impl std::fmt::Debug for FileHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut res: std::fmt::Result = writeln!(f, "FILE HEADER");
 
-        res = writeln!(f, "\tMAGIC:\t\t\t\t\t\t{}", self.magic);
-        res = writeln!(f, "\tPAGE SIZE:\t\t\t\t\t{:?}", self.page_size);
-        res = writeln!(f, "\tFORMAT WRITE:\t\t\t\t{:?}\t(2 = WAL)", self.format_write);
-        res = writeln!(f, "\tFORMAT READ:\t\t\t\t{:?}\t(2 = WAL)", self.format_read);
-        res = writeln!(f, "\tRESERVED SPACE:\t\t\t\t{:?}", self.reserved_space);
+        res = writeln!(f, "\tMAGIC:\t\t\t\t{}", self.magic);
+        res = writeln!(f, "\tPAGE SIZE:\t\t\t{:?}", self.page_size);
+        res = writeln!(f, "\tFORMAT WRITE:\t\t\t{:?}\t(2 = WAL)", self.format_write);
+        res = writeln!(f, "\tFORMAT READ:\t\t\t{:?}\t(2 = WAL)", self.format_read);
+        res = writeln!(f, "\tRESERVED SPACE:\t\t\t{:?}", self.reserved_space);
         res = writeln!(f, "\tMAX EMBED PAYLOAD FRACTION:\t{:?}", self.max_embed_payload_fraction);
         res = writeln!(f, "\tMIN EMBED PAYLOAD FRACTION:\t{:?}", self.min_embed_payload_fraction);
         res = writeln!(f, "\tFILE CHANGE COUNTER:\t\t{:?}", self.file_change_ctr);
-        res = writeln!(f, "\tPAGE COUNT:\t\t\t\t\t{:?}", self.page_count);
+        res = writeln!(f, "\tPAGE COUNT:\t\t\t{:?}", self.page_count);
         res = writeln!(f, "\tFIRST FREELIST TRUNK PAGE NUM:\t{:?}", self.first_freelist_trunk_page);
         res = writeln!(f, "\tFREELIST PAGES COUNT:\t\t{:?}", self.freelist_page_count);
-        res = writeln!(f, "\tSCHEMA COOKIE:\t\t\t\t{:?}\t(Incremented each time the db schema changes)", self.schema_cookie);
+        res = writeln!(f, "\tSCHEMA COOKIE:\t\t\t{:?}\t(Incremented each time the db schema changes)", self.schema_cookie);
         res = writeln!(f, "\tSCHEMA FORMAT NUMBER:\t\t{:?}", self.schema_format_number);
-        res = writeln!(f, "\tPAGE CACHE SIZE:\t\t\t{:?}", self.page_cache_size);
+        res = writeln!(f, "\tPAGE CACHE SIZE:\t\t{:?}", self.page_cache_size);
         res = writeln!(f, "\tLARGEST ROOT B-TREE PAGE NUM:\t{:?}", self.largest_rootbtree_page_num);
-        res = writeln!(f, "\tTEXT ENCODING:\t\t\t\t{:?}\t(1 = UTF8, 2 = UTF16le; 3 = UTF16be)", self.text_encodig);
-        res = writeln!(f, "\tUSER VERSION:\t\t\t\t{:?}", self.user_version);
-        res = writeln!(f, "\tAUTO VACUUM MODE:\t\t\t{:?}\t(0 = DISABLED; 1 = AUTO/FULL; 2 = INCREMENTAL)", self.is_incremental_vacuum_mode);
-        res = writeln!(f, "\tAPPLICATION ID:\t\t\t\t{:?}", self.app_id);
-        res = writeln!(f, "\tVERSION:\t\t\t\t\t{:?}", self.version);
+        res = writeln!(f, "\tTEXT ENCODING:\t\t\t{:?}\t(1 = UTF8, 2 = UTF16le; 3 = UTF16be)", self.text_encodig);
+        res = writeln!(f, "\tUSER VERSION:\t\t\t{:?}", self.user_version);
+        res = writeln!(f, "\tAUTO VACUUM MODE:\t\t{:?}\t(0 = DISABLED; 1 = AUTO/FULL; 2 = INCREMENTAL)", self.is_incremental_vacuum_mode);
+        res = writeln!(f, "\tAPPLICATION ID:\t\t\t{:?}", self.app_id);
+        res = writeln!(f, "\tVERSION:\t\t\t{:?}", self.version);
         res = writeln!(f, "");
 
         res
@@ -423,13 +420,13 @@ impl MainFile {
             unsafe{
                 /* If page is a free page, do not parse it now */
                 if FREEPAGES.contains(&(page_num + 1)){
-                    warn!("Page {} is a free page. Let's go to the next one", page_num + 1);
+                    debug!("Page {} is a free page. Let's go to the next one", page_num + 1);
                     continue;
                 }
                 
                 /* If page is an overflow page, its content is taken when parsing leaf table pages' cells */
                 if OVERFLOW_PAGES.contains(&(page_num + 1)){
-                    warn!("Page {} is an overflow page. Let's go to the next one", page_num + 1);
+                    debug!("Page {} is an overflow page. Let's go to the next one", page_num + 1);
                     continue;
                 }
             }

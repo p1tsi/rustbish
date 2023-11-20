@@ -5,22 +5,25 @@ use std::fs::{
     read,
     File
 };
-use std::path::Path;
+use std::path::{Path, MAIN_SEPARATOR};
 use std::io::Write;
 use time::macros::format_description;
 
 use clap::Parser;
+
 
 mod mainfile;
 mod wal;
 mod db;
 mod utils;
 mod structs;
+mod formatters;
+mod args;
+mod constants;
 
 use mainfile::{FileHeader, MainFile};
 use wal::WALFile;
-use db::DataBase;
-
+use args::Args;
 
 
 fn generate() -> String {
@@ -35,51 +38,11 @@ fn generate() -> String {
                                           by p1tsi\n\n")
 }
 
-
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// Path of the main SQLite file
-    filepath: String,
-
-    /// Output directory contaning generated files
-    #[arg(short, long, default_value_t = String::from("output"))]
-    output_dir: String,
-
-    /// If present, parse also WAL file. It should be inside the same directory of main file
-    #[arg(long, short, action)]
-    wal: bool,
-
-    /// If present, create TXTs of parsed files
-    #[arg(long, short, action)]
-    parsed_files: bool,
-    
-    /// If present, only print SQLite file header
-    #[arg(long, short, action)]
-    fileheader: bool,
-
-    /// If present, try to discover missing row ids for each table 
-    #[arg(long, short, action)]
-    missingids: bool,
-
-    /// If present, try to get triggers queries 
-    #[arg(long, short, action)]
-    triggers: bool,
-
-    /// If present, try to extract indices
-    #[arg(long, short, action)]
-    indices: bool,
-
-    /// If present, print DEBUG info to stdout
-    #[arg(long, short, action)]
-    debug: bool
-}
-
-
 fn main() -> () {
-    println!("{}", generate());
 
     let args: Args = Args::parse();
+
+    println!("{}", generate());
 
     let log_filter_level = match args.debug {
         true => LevelFilter::Debug,
@@ -93,15 +56,19 @@ fn main() -> () {
         .init()
         .unwrap();
 
-    
-
     let db_filepath: &String = &args.filepath;
+    
     if !Path::new(db_filepath).exists() {
         error!("{} not found", db_filepath);
-        
         return;
-    } 
-    let filename: &str = Path::new(db_filepath).file_stem().unwrap().to_str().unwrap();
+    }
+    
+    let filename: &str = Path::new(db_filepath)
+    .file_stem()
+    .unwrap()
+    .to_str()
+    .unwrap();
+
     let bytearray: Vec<u8> = read(db_filepath).unwrap();
 
     if bytearray.len() == 0{
@@ -121,7 +88,7 @@ fn main() -> () {
     }
 
     // Creating output dir
-    if !Path::new(&args.output_dir.to_string()).exists(){
+    if !Path::new(&args.output_dir.clone().to_string()).exists(){
         info!("Create output dir: {}", args.output_dir.to_string());
         let _ = std::fs::create_dir_all(
             Path::new(".")
@@ -165,6 +132,8 @@ fn main() -> () {
             }
             else{
                 parsed_wal_file = Some(WALFile::new(&wal_bytearray, wal_bytearray.len() as u64));
+                
+                // Print the txt of extracted data from WAL
                 if args.parsed_files {
                     let mut out_wal_file: File = File::create(
                         Path::new(".")
@@ -179,25 +148,36 @@ fn main() -> () {
         info!("{:=<45}", "");
     }
     
-    //Final JSON file
-    let json_filename: String = format!("{}.json", filename);
-    let mut output: File = File::create(
-        Path::new(".")
-        .join(args.output_dir.to_string())
-        .join(&json_filename)
-    ).unwrap();
+    let out_format = args.format;
+    match out_format.as_str() {
+        "JSON" => {
+            let json_filename: String = format!("{}.json", filename);
+            let outfile: File = File::create(
+                Path::new(".")
+                .join(args.output_dir.to_string())
+                .join(&json_filename)
+            ).unwrap();
+            formatters::json_run(
+                parsed_main_file,
+                parsed_wal_file,
+                outfile,
+                args.missingids,
+                args.triggers,
+                args.indices);
+            info!("Created JSON file to: {}{}{}", args.output_dir, MAIN_SEPARATOR, json_filename);
+        },
+        "CSV" => {
+            formatters::csv_run(
+                parsed_main_file, 
+                parsed_wal_file,
+                args.missingids,
+                args.triggers,
+                args.indices
+            );
+        },
+        undefined_formatter => warn!("{undefined_formatter} formatter not found.")
+    };
 
-    let db: DataBase = DataBase::new(
-        parsed_main_file,
-        parsed_wal_file,
-        args.missingids,
-        args.triggers,
-        args.indices
-    );
-
-    write!(output, "{}", db.to_json()).unwrap();
-    info!("Created JSON file to: {}/{}", args.output_dir, json_filename);
     info!("Done. I had a nice trip. See you soon!");
 
-    return;
 }
