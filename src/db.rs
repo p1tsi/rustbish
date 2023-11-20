@@ -491,7 +491,7 @@ impl DataBase {
         .iter()
         .for_each(
             |(table_name, info)| {
-                info!("Table: {}", table_name);
+                debug!("Table: {}", table_name);
                 let mut table: Table = match Table::new(&db_file, &wal_file, table_name.to_string(), info) {
                     Ok(t) => t,
                     Err(e) => {
@@ -500,7 +500,7 @@ impl DataBase {
                     }
                 };
                 if add_missing_ids {
-                    info!("Looking for missing row ids...");
+                    debug!("Looking for missing row ids...");
                     table.find_missing_rowids();
                 }
                 tables.push(table);
