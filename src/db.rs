@@ -143,7 +143,7 @@ impl Diff {
         .for_each(
             |ins| {
                 csv_string.push_str(ins.to_csv().as_str());
-                csv_string.push_str("1,0,0\n");
+                csv_string.push_str("1;0;0\n");
             }
         );
 
@@ -152,7 +152,7 @@ impl Diff {
         .for_each(
             |del| {
                 csv_string.push_str(del.to_csv().as_str());
-                csv_string.push_str("0,1,0\n");
+                csv_string.push_str("0;1;0\n");
             }
         );
 
@@ -165,7 +165,7 @@ impl Diff {
                         let mut row_csv = String::from(format!("{},", modif.rowid));
                         mod_row.iter().for_each(|col| row_csv.push_str(format!("{},", col).as_str()));
                         csv_string.push_str(row_csv.as_str());
-                        csv_string.push_str("0,0,1\n");
+                        csv_string.push_str("0;0;1\n");
                     }
                 );
             }
@@ -423,11 +423,11 @@ impl Table {
         }
 
         // Column names
-        let mut csv_string = String::from("__ROWID__,");
+        let mut csv_string = String::from("__ROWID__;");
         columns.iter().for_each(
             |col| 
                 csv_string.push_str(
-                    format!("{col},").as_str()
+                    format!("{col};").as_str()
             )
         );
         let _ = csv_string.remove(csv_string.len() - 1); // remove last ','
@@ -440,7 +440,7 @@ impl Table {
             |row| {
                 csv_string.push_str(row.to_csv().as_str());
                 if self.wal.is_some() {
-                    csv_string.push_str("0,0,0\n");
+                    csv_string.push_str("0;0;0\n");
                 }
                 else{
                     let _ = csv_string.remove(csv_string.len() - 1); // remove last ','

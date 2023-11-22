@@ -956,13 +956,13 @@ impl LeafCell {
     }
 
     pub fn to_csv(&self) -> String {
-        let mut csv_string = String::from("");
+        let mut csv_string = String::from(format!("{};", self.rowid.unwrap()));
         self.data
         .iter()
         .for_each(
             |item| 
                 csv_string.push_str(
-                    format!("{},{},", self.rowid.unwrap(), item).as_str()
+                    format!("{};", item).as_str()
             )
         );
         
