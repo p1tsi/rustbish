@@ -162,8 +162,8 @@ impl Diff {
             |modif| {
                 modif.sequence.iter().for_each(
                     |mod_row| {
-                        let mut row_csv = String::from(format!("{},", modif.rowid));
-                        mod_row.iter().for_each(|col| row_csv.push_str(format!("{},", col).as_str()));
+                        let mut row_csv = String::from(format!("{};", modif.rowid));
+                        mod_row.iter().for_each(|col| row_csv.push_str(format!("{};", col).as_str()));
                         csv_string.push_str(row_csv.as_str());
                         csv_string.push_str("0;0;1\n");
                     }
