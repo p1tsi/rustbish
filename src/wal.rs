@@ -1,64 +1,57 @@
-use log::{info, warn, debug};
-use crate::structs::{
-    Page,
-    FREEPAGES,
-    OVERFLOW_PAGES
-};
-
+use crate::structs::{Page, FREEPAGES, OVERFLOW_PAGES};
+use log::{debug, info, warn};
 
 /// Representation of the header of a wal frame
 #[derive(Clone)]
 pub struct WALFrameHeader {
     page_num: u32,
-    page_count_after_commit: u32,   // For commit records, the size of the database file in pages after the commit. For all other records, zero. 
-    salt1: u32,                     // Should be the same as the one in WALFileHeader
-    salt2: u32,                     // Should be the same as the one in WALFileHeader  
-    checksum1: u32,                        
-    checksum2: u32           
+    page_count_after_commit: u32, // For commit records, the size of the database file in pages after the commit. For all other records, zero.
+    salt1: u32,                   // Should be the same as the one in WALFileHeader
+    salt2: u32,                   // Should be the same as the one in WALFileHeader
+    checksum1: u32,
+    checksum2: u32,
 }
 
 impl WALFrameHeader {
-
     /// Parses first 32 bytes of the wal file
     fn new(wal_bytearray: &[u8], page_ptr: usize) -> WALFrameHeader {
-        
-        WALFrameHeader{
+        WALFrameHeader {
             page_num: u32::from_be_bytes([
-                wal_bytearray[page_ptr], 
-                wal_bytearray[page_ptr + 1], 
-                wal_bytearray[page_ptr + 2], 
-                wal_bytearray[page_ptr + 3]]
-            ),
-            page_count_after_commit : u32::from_be_bytes([
-                wal_bytearray[page_ptr + 4], 
-                wal_bytearray[page_ptr + 5], 
-                wal_bytearray[page_ptr + 6], 
-                wal_bytearray[page_ptr + 7]]
-            ),
+                wal_bytearray[page_ptr],
+                wal_bytearray[page_ptr + 1],
+                wal_bytearray[page_ptr + 2],
+                wal_bytearray[page_ptr + 3],
+            ]),
+            page_count_after_commit: u32::from_be_bytes([
+                wal_bytearray[page_ptr + 4],
+                wal_bytearray[page_ptr + 5],
+                wal_bytearray[page_ptr + 6],
+                wal_bytearray[page_ptr + 7],
+            ]),
             salt1: u32::from_be_bytes([
-                wal_bytearray[page_ptr + 8], 
-                wal_bytearray[page_ptr + 9], 
-                wal_bytearray[page_ptr + 10], 
-                wal_bytearray[page_ptr + 11]]
-            ),
+                wal_bytearray[page_ptr + 8],
+                wal_bytearray[page_ptr + 9],
+                wal_bytearray[page_ptr + 10],
+                wal_bytearray[page_ptr + 11],
+            ]),
             salt2: u32::from_be_bytes([
-                wal_bytearray[page_ptr + 12], 
-                wal_bytearray[page_ptr + 13], 
-                wal_bytearray[page_ptr + 14], 
-                wal_bytearray[page_ptr + 15]]
-            ), 
+                wal_bytearray[page_ptr + 12],
+                wal_bytearray[page_ptr + 13],
+                wal_bytearray[page_ptr + 14],
+                wal_bytearray[page_ptr + 15],
+            ]),
             checksum1: u32::from_be_bytes([
-                wal_bytearray[page_ptr + 16], 
+                wal_bytearray[page_ptr + 16],
                 wal_bytearray[page_ptr + 17],
-                wal_bytearray[page_ptr + 18], 
-                wal_bytearray[page_ptr + 19]]
-            ),
+                wal_bytearray[page_ptr + 18],
+                wal_bytearray[page_ptr + 19],
+            ]),
             checksum2: u32::from_be_bytes([
                 wal_bytearray[page_ptr + 20],
-                wal_bytearray[page_ptr + 21], 
-                wal_bytearray[page_ptr + 22], 
-                wal_bytearray[page_ptr + 23]]
-            ),
+                wal_bytearray[page_ptr + 21],
+                wal_bytearray[page_ptr + 22],
+                wal_bytearray[page_ptr + 23],
+            ]),
         }
     }
 
@@ -71,7 +64,11 @@ impl std::fmt::Debug for WALFrameHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut res: std::fmt::Result = writeln!(f, "\tPAGE NUM:\t\t\t\t\t{}", self.page_num);
 
-        res = writeln!(f, "\tPAGE COUNT AFTER COMMIT:\t{}", self.page_count_after_commit);
+        res = writeln!(
+            f,
+            "\tPAGE COUNT AFTER COMMIT:\t{}",
+            self.page_count_after_commit
+        );
         res = writeln!(f, "\tPAGE FIRST SALT:\t\t\t0x{:02X?}", self.salt1);
         res = writeln!(f, "\tPAGE SECOND SALT:\t\t\t0x{:02X?}", self.salt2);
         res = writeln!(f, "\tPAGE FIRST CHECKSUM:\t\t0x{:02X?}", self.checksum1);
@@ -91,47 +88,42 @@ pub struct WALFrame {
 }
 
 impl WALFrame {
-
     /// Parses a region of raw bytes of the file and returns a frame
-    fn new(
-        bytearray: &[u8], 
-        frame_num: u32, 
-        offset: usize, 
-    ) -> Option<WALFrame> {
-
+    fn new(bytearray: &[u8], frame_num: u32, offset: usize) -> Option<WALFrame> {
         let header: WALFrameHeader = WALFrameHeader::new(bytearray, offset);
         debug!("FRAME WITH PAGE: {:?} (0x{:02x?})", header.page_num, offset);
 
         //let mainpage_offset = (header.page_num - 1) as usize * 4096;
         //debug!("{}", &bytearray[offset + 24 .. offset + 24 + 4096] == &maindbbytes[mainpage_offset .. mainpage_offset + 4096]);
 
-        unsafe{
+        unsafe {
             /* If page is a free page, do not parse it now */
-            if FREEPAGES.contains(&(header.page_num)){
-                warn!("Page {} is a free page. Let's go to the next one", header.page_num);
+            if FREEPAGES.contains(&(header.page_num)) {
+                warn!(
+                    "Page {} is a free page. Let's go to the next one",
+                    header.page_num
+                );
                 debug!("{:*<20}", "");
                 return None;
             }
-            
+
             /* If page is an overflow page, its content has already been taken */
-            if OVERFLOW_PAGES.contains(&(header.page_num)){
-                warn!("Page {} is an overflow page. Let's go to the next one", header.page_num);
+            if OVERFLOW_PAGES.contains(&(header.page_num)) {
+                warn!(
+                    "Page {} is an overflow page. Let's go to the next one",
+                    header.page_num
+                );
                 debug!("{:*<20}", "");
                 return None;
             }
         }
 
-        let page: Page = Page::new(
-            bytearray, 
-            offset + 24, 
-            header.page_num - 1,
-            true
-        );
+        let page: Page = Page::new(bytearray, offset + 24, header.page_num - 1, true);
 
-        Some(WALFrame{
+        Some(WALFrame {
             i: frame_num,
             header,
-            page 
+            page,
         })
     }
 
@@ -156,7 +148,6 @@ impl std::fmt::Debug for WALFrame {
     }
 }
 
-
 /// Representation of the header of the WAL file
 #[derive(Clone)]
 pub struct WALFileHeader {
@@ -173,16 +164,56 @@ pub struct WALFileHeader {
 
 impl WALFileHeader {
     fn new(wal_bytearray: &[u8], file_size: u64) -> WALFileHeader {
-        let page_size = u32::from_be_bytes([wal_bytearray[8], wal_bytearray[9], wal_bytearray[10], wal_bytearray[11]]);
+        let page_size = u32::from_be_bytes([
+            wal_bytearray[8],
+            wal_bytearray[9],
+            wal_bytearray[10],
+            wal_bytearray[11],
+        ]);
         WALFileHeader {
-            magic: u32::from_be_bytes([wal_bytearray[0], wal_bytearray[1], wal_bytearray[2], wal_bytearray[3]]),
-            format_version: u32::from_be_bytes([wal_bytearray[4], wal_bytearray[5], wal_bytearray[6], wal_bytearray[7]]),
+            magic: u32::from_be_bytes([
+                wal_bytearray[0],
+                wal_bytearray[1],
+                wal_bytearray[2],
+                wal_bytearray[3],
+            ]),
+            format_version: u32::from_be_bytes([
+                wal_bytearray[4],
+                wal_bytearray[5],
+                wal_bytearray[6],
+                wal_bytearray[7],
+            ]),
             page_size,
-            checkpoint_seq_num: u32::from_be_bytes([wal_bytearray[12], wal_bytearray[13], wal_bytearray[14], wal_bytearray[15]]),
-            salt1: u32::from_be_bytes([wal_bytearray[16], wal_bytearray[17], wal_bytearray[18], wal_bytearray[19]]),
-            salt2: u32::from_be_bytes([wal_bytearray[20], wal_bytearray[21], wal_bytearray[22], wal_bytearray[23]]),
-            checksum1: u32::from_be_bytes([wal_bytearray[24], wal_bytearray[25], wal_bytearray[26], wal_bytearray[27]]),
-            checksum2: u32::from_be_bytes([wal_bytearray[28], wal_bytearray[29], wal_bytearray[30], wal_bytearray[31]]),
+            checkpoint_seq_num: u32::from_be_bytes([
+                wal_bytearray[12],
+                wal_bytearray[13],
+                wal_bytearray[14],
+                wal_bytearray[15],
+            ]),
+            salt1: u32::from_be_bytes([
+                wal_bytearray[16],
+                wal_bytearray[17],
+                wal_bytearray[18],
+                wal_bytearray[19],
+            ]),
+            salt2: u32::from_be_bytes([
+                wal_bytearray[20],
+                wal_bytearray[21],
+                wal_bytearray[22],
+                wal_bytearray[23],
+            ]),
+            checksum1: u32::from_be_bytes([
+                wal_bytearray[24],
+                wal_bytearray[25],
+                wal_bytearray[26],
+                wal_bytearray[27],
+            ]),
+            checksum2: u32::from_be_bytes([
+                wal_bytearray[28],
+                wal_bytearray[29],
+                wal_bytearray[30],
+                wal_bytearray[31],
+            ]),
             frame_count: ((file_size - 32) / (page_size as u64 + 24)) as u32,
         }
     }
@@ -207,7 +238,6 @@ impl std::fmt::Debug for WALFileHeader {
     }
 }
 
-
 /// Representation of a WAL file
 #[derive(Clone)]
 pub struct WALFile {
@@ -216,17 +246,15 @@ pub struct WALFile {
 }
 
 impl WALFile {
-
     /// Parses the whole file
     pub fn new(bytearray: &[u8], file_size: u64) -> WALFile {
         info!("Parsing WAL file...");
 
         let header: WALFileHeader = WALFileHeader::new(&bytearray, file_size);
-        
+
         let mut frames: Vec<WALFrame> = vec![];
         let mut frame_offset: u32;
-        for i in 0..header.frame_count{
-
+        for i in 0..header.frame_count {
             frame_offset = (header.page_size + 24) * i + 32;
 
             //debug!("Parsing frame {} at 0x{:02x?}", i, frame_offset);
@@ -234,20 +262,13 @@ impl WALFile {
             let filename: &str = Path::new(db_filepath).file_stem().unwrap().to_str().unwrap();
             let maindbbytes = read(db_filepath).unwrap();*/
 
-            match WALFrame::new(
-                &bytearray, 
-                i, 
-                frame_offset as usize,
-            ){
+            match WALFrame::new(&bytearray, i, frame_offset as usize) {
                 Some(frame) => frames.push(frame),
-                None => ()
+                None => (),
             };
         }
 
-        WALFile {
-            header,
-            frames,
-        }
+        WALFile { header, frames }
     }
 
     pub fn frames(&self) -> Vec<WALFrame> {
@@ -264,7 +285,7 @@ impl WALFile {
 
     pub fn get_all_mod_pages(&self) -> HashMap<u32, u32> {
         let mut pages: HashMap<u32, u32> = HashMap::new();
-        
+
         for frame in self.frames.iter(){
             if frame.page.is_table_leaf_page() {
                 let page_num: u32 = frame.header.page_num - 1;
@@ -277,12 +298,12 @@ impl WALFile {
                         pages.insert(page_num, 1);
                     },
                 };
-            }   
+            }
         }
 
         trace!("{:?}", pages);
         pages
-    }   
+    }
 
     pub fn get_frames_by_page_num(&self, number: u32) -> Vec<&WALFrame> {
         let mut res = vec![];
@@ -294,16 +315,15 @@ impl WALFile {
 
         res
     }*/
-
 }
 
 impl std::fmt::Debug for WALFile {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut res: std::fmt::Result = writeln!(f, "{:?}", self.header);
 
-        for frame in self.frames.iter(){
+        for frame in self.frames.iter() {
             res = write!(f, "{:?}", frame);
-            res = writeln!(f, "{:=<20}\n", "");          
+            res = writeln!(f, "{:=<20}\n", "");
         }
 
         res

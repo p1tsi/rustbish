@@ -27,16 +27,16 @@ pub struct Args {
     /// If present, create TXTs of parsed files
     #[arg(long, short, action)]
     pub parsed_files: bool,
-    
+
     /// If present, only print SQLite file header
     #[arg(long, short, action)]
     pub fileheader: bool,
 
-    /// If present, try to discover missing row ids for each table 
+    /// If present, try to discover missing row ids for each table
     #[arg(long, short, action)]
     pub missingids: bool,
 
-    /// If present, try to get triggers queries 
+    /// If present, try to get triggers queries
     #[arg(long, short, action)]
     pub triggers: bool,
 
@@ -46,5 +46,5 @@ pub struct Args {
 
     /// If present, print DEBUG info to stdout
     #[arg(long, short, action)]
-    pub debug: bool
+    pub debug: bool,
 }
