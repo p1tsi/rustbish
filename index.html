@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rustbish</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      font-family: sans-serif;
+      text-align: center;
+    }
+
+    .file-input-row {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+      gap: 10px;
+    }
+    .file-input-row label {
+      margin-right: 5px;
+    }
+
+    label {
+      font-weight: bold;
+    }
+
+    input[type="file"] {
+      padding: 4px;
+    }
+
+    button {
+      margin-top: 15px;
+      padding: 8px 16px;
+    }
+
+    pre {
+      display: none;
+      text-align: left;
+      max-width: 90%;
+      overflow-x: auto;
+      background-color: #f4f4f4;
+      padding: 1em;
+      border-radius: 4px;
+    }
+
+    .logo-title {
+      display: flex;
+      align-items: center;
+      gap: 20px; /* space between images and title */
+    }
+
+    .logo {
+      height: 60px;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="logo-title">
+    <img src="logo.png" class="logo">
+    <h1>Rustbish</h1>
+    <img src="logo.png" class="logo">
+  </div>
+  
+  <p>Convert an SQLite file and its WAL to a JSON file</p>
+  <h4>All the magic happens CLIENT-SIDE thanks to WebAssembly</h4>
+  <div class="file-input-row">
+    <label for="mainFile">Main*:</label>
+    <input type="file" id="mainFile">
+  </div>
+  <div class="file-input-row">
+    <label for="walFile">WAL:</label>
+    <input type="file" id="walFile">
+  </div>
+
+  <p style="font-size: smaller">*: required</p>
+
+  <button id="goButton">GO</button>
+
+  <pre id="time"></pre>
+  <pre id="output"></pre>
+  <pre id="error"></pre>
+  
+  <p style="padding: 20px;">Developed by <a href="https://p1tsi.github.io">p1tsi</a></p>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
